@@ -5,6 +5,7 @@ A World of Warcraft: Forever addon that shows a guildmate's **public guild note*
 ```
 [Bean Sommelier]: hello        ->   [Bean Sommelier(snerf)]: hello
 ```
+<img width="497" height="138" alt="image" src="https://github.com/user-attachments/assets/02d04b7e-8a21-45f1-9b9a-136886f8b9c3" />
 
 - Keeps Blizzard's class colour on the name; clicking, right-clicking and whispering a name work as normal.
 - Works with the default chat and with the EllesmereUI Chat module.
