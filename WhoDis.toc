@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: WhoDis
+## Notes: Shows a guildmate's public guild note next to their name in chat, e.g. [Bean Sommelier(snerf)]:
+## Author: snerfy
+## Version: @project-version@
+## SavedVariables: WhoDisDB
+## Category: Chat
+
+WhoDis.lua

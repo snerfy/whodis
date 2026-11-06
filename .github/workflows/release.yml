@@ -1,0 +1,26 @@
+name: Package and Release
+
+# Pushing a tag like v1.0.0 builds the addon zip and uploads it to
+# CurseForge (when CF_API_KEY is set) and to GitHub Releases.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # lets the packager create the GitHub Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history, so the changelog is filled in
+
+      - name: Package and Release
+        uses: BigWigsMods/packager@v2
