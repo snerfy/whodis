@@ -4,6 +4,7 @@
 ## Author: snerfy
 ## Version: @project-version@
 ## SavedVariables: WhoDisDB
+## X-Curse-Project-ID: 1787662
 ## Category: Chat
 
 WhoDis.lua
