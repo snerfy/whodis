@@ -2,3 +2,4 @@ package-as: WhoDis
 
 ignore:
   - README.md
+  - AGENTS.md
