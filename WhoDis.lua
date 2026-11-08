@@ -1,6 +1,6 @@
 -- WhoDis
 -- Appends a guildmate's public guild note to their name in chat:
---     [Bean Sommelier]: hi   ->   [Bean Sommelier(snerf)]: hi
+--     [Bean Sommelier]: hi   ->   [Bean Sommelier (snerf)]: hi
 --
 -- Design (matches the taint rules the other Forever-era chat addons document):
 --   * NEVER replace cf.AddMessage or any Blizzard global -- that taints the secure
@@ -135,7 +135,10 @@ end
 ---------------------------------------------------------------------------
 -- |Hplayer:Name-Realm:lineID:CHATTYPE|h[|cffAABBCCName|r]|h
 --  ^ capture 1 (prefix, includes "|h[")       ^ 3 (display)   ^ 4 "]|h"
-local PLAYER_LINK = "(|Hplayer:([^:|]+)[^|]*|h%[)(.-)(%]|h)"
+-- |Hplayer:Name-Realm:lineID:CHATTYPE|h<label>|h
+-- The label is usually "[Name]" (often class-coloured), but chat addons may drop
+-- the brackets (Chattynator's "letter" channel style) or add text inside them.
+local PLAYER_LINK = "(|Hplayer:([^:|]+)[^|]*|h)(.-)(|h)"
 
 -- Zero-width marker (an empty colour span) appended after every note we insert.
 -- Chat gets re-fed to us: Ellesmere rebuilds its window from Blizzard's stored
@@ -150,7 +153,10 @@ local function AddNotes(text)
         if not note then return nil end                        -- nil keeps the original
         local shown = "(" .. note .. ")"
         if db.color then shown = "|cff" .. db.color .. shown .. "|r" end
-        return prefix .. display .. shown .. MARK .. suffix
+        shown = " " .. shown                                    -- [Name (note)]
+        -- put the note inside the closing bracket when there is one: [Name(note)]
+        local inner, close = display:match("^(.-)(%]?)$")
+        return prefix .. inner .. shown .. MARK .. close .. suffix
     end))
 end
 
@@ -170,7 +176,8 @@ local stats = { rewritten = 0, noBuffer = 0, mismatch = 0 }
 local LOG_MAX = 12
 local rewriteLog = {}
 local function LogRewrite(frame, before, after, result)
-    local name = frame.GetName and frame:GetName() or "EllesmereUI window"
+    local name = type(frame) == "string" and frame
+              or (frame.GetName and frame:GetName()) or "EllesmereUI window"
     table.insert(rewriteLog, 1, { frame = tostring(name), before = before, after = after, result = result })
     rewriteLog[LOG_MAX + 1] = nil
 end
@@ -251,23 +258,9 @@ local function Rewrite(frame, text)
         return
     end
 
-    -- Fallback for a frame without TransformMessages: edit the newest stored entry,
-    -- only if it is still exactly the line we were handed.
-    local out = AddNotes(text)
-    if out == text then return end
-    local hb = frame.historyBuffer
-    local e = hb and hb.GetEntryAtIndex and hb:GetEntryAtIndex(1)
-    if not e then
-        stats.noBuffer = stats.noBuffer + 1
-        LogRewrite(frame, text, out, "no buffer")
-    elseif type(e.message) == "string" and not IsSecret(e.message) and e.message == text then
-        e.message = out
-        stats.rewritten = stats.rewritten + 1
-        LogRewrite(frame, text, out, "rewritten (fallback)")
-    else
-        stats.mismatch = stats.mismatch + 1
-        LogRewrite(frame, text, out, "entry mismatch")
-    end
+    -- No TransformMessages on this frame: leave the line alone. WhoDis never writes
+    -- into a chat frame's history directly, since that is addon code changing
+    -- Blizzard's data (a taint risk).
 end
 
 -- Never let an error escape this hook: with EllesmereUI Chat, Ellesmere's own hook
@@ -281,8 +274,9 @@ local function OnAddMessage(frame, text)
         lastErrorLine = type(text) == "string" and not IsSecret(text) and text or "(not a plain string)"
         if not errorAnnounced then
             errorAnnounced = true
-            -- printing from inside a chat hook would re-enter chat; do it next frame
-            C_Timer.After(0, function()
+            -- printing from inside a chat hook would re-enter chat; do it next frame.
+            -- pcall: nothing in this hook may raise, not even the announcement.
+            pcall(C_Timer.After, 0, function()
                 print("|cff33ff99WhoDis|r: hit an error on a chat line (the line itself was left alone). Type /whodis errors for details.")
             end)
         end
@@ -329,7 +323,61 @@ end
 -- Safe to call repeatedly: already-hooked frames are skipped. Ellesmere creates its
 -- windows a moment after login (and for new whisper windows later), so this is also
 -- driven by a timer and by window events.
+-- Chattynator replaces the chat display: it hides Blizzard's chat frames, stops their
+-- chat events and draws its own window. It offers a public modifier API that edits a
+-- display copy of each line ("backing data is unaffected"), so that is all WhoDis uses
+-- there: no hooks and nothing touched on Blizzard's frames. Chattynator only calls
+-- modifiers for text that is not a protected (secret) value, and removes a modifier
+-- that errors, so this one never lets an error out.
+local chattynatorActive = false
+
+-- Chattynator variant of AddNotes. Chattynator runs every modifier on a fresh copy of
+-- the original line, so no MARK is needed (nothing can stack), and the note goes in
+-- front of the label's closing |r / ] without any extra escape codes. That keeps the
+-- label in the simple "[|cffxxxxxxName|r]" shape Chattynator's own modifiers (level,
+-- class colours, bracket shortening) match on, whichever order the modifiers run in.
+local function AddNotesChattynator(text)
+    return (text:gsub(PLAYER_LINK, function(prefix, name, display, suffix)
+        local note = Lookup(name)
+        if not note then return nil end
+        local shown = "(" .. note .. ")"
+        if db.color then shown = "|cff" .. db.color .. shown .. "|r" end
+        shown = " " .. shown                                    -- [Name (note)]
+        local body, tail = display:match("^(.-)(|r%]?)$")
+        if not body then body, tail = display:match("^(.-)(%]?)$") end
+        return prefix .. body .. shown .. tail .. suffix
+    end))
+end
+
+local function ChattynatorModifier(data)
+    if not db or not db.enabled then return end
+    local text = data and data.text
+    if type(text) ~= "string" or IsSecret(text) then return end
+    if not text:find("|Hplayer:", 1, true) then return end
+    local ok, out = pcall(AddNotesChattynator, text)
+    if not ok then
+        stats.errors = stats.errors + 1
+        return
+    end
+    if out ~= text then
+        data.text = out
+        stats.rewritten = stats.rewritten + 1
+        LogRewrite("Chattynator", text, out, "rewritten")
+    end
+end
+
+local function RegisterChattynator()
+    if chattynatorActive then return end
+    local api = _G.Chattynator and _G.Chattynator.API
+    if type(api) ~= "table" or type(api.AddModifier) ~= "function" then return end
+    api.AddModifier(ChattynatorModifier)
+    chattynatorActive = true
+end
+
 local function HookFrames()
+    -- With Chattynator, Blizzard's chat frames are hidden and get no chat events, so
+    -- WhoDis leaves them (and everything else) alone.
+    if chattynatorActive then return end
     local names = _G.CHAT_FRAMES
     if type(names) == "table" and #names > 0 then
         for _, name in ipairs(names) do
@@ -382,7 +430,7 @@ local function RunSelfTest(realName)
     local me = UnitName("player") or "You"
     for i, c in ipairs(SELFTEST_CASES) do
         -- same shape as a real rewritten line: class-coloured name, (note), marker
-        local line = "|Hplayer:" .. me .. ":0:GUILD|h[|cff8788ee" .. me .. "|r(" .. c[1] .. ")" .. MARK
+        local line = "|Hplayer:" .. me .. ":0:GUILD|h[|cff8788ee" .. me .. "|r (" .. c[1] .. ")" .. MARK
                      .. "]|h: selftest line " .. i
         local ok, err = pcall(frame.AddMessage, frame, line)
         if not ok then Say(("   line %d raised a Lua error: %s"):format(i, tostring(err))) end
@@ -472,6 +520,9 @@ SlashCmdList["WHODIS"] = function(msg)
         RunSelfTest(arg)
     elseif cmd == "status" then
         HookFrames()
+        if chattynatorActive then
+            Say("Chattynator detected: notes are added through its modifier API; Blizzard's chat frames are not hooked.")
+        end
         Say(("roster: %d members seen, %d notes cached, cache rebuilt %s")
             :format(rosterSeen, noteCount, lastRebuildAt and ("%ds ago"):format(GetTime() - lastRebuildAt) or "never"))
         if badNotes > 0 then
@@ -538,12 +589,14 @@ f:RegisterEvent("PLAYER_GUILD_UPDATE")
 f:RegisterEvent("GUILD_ROSTER_UPDATE")
 f:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" then
+        if arg1 == "Chattynator" then RegisterChattynator() return end
         if arg1 ~= ADDON_NAME then return end
         WhoDisDB = WhoDisDB or {}
         db = WhoDisDB
         for k, v in pairs(DEFAULTS) do
             if db[k] == nil then db[k] = v end
         end
+        RegisterChattynator()          -- Chattynator may have loaded before us
     elseif event == "PLAYER_LOGIN" then
         HookFrames()
         -- Ellesmere builds its chat windows shortly after login; catch them early,
