@@ -8,7 +8,7 @@ A World of Warcraft: Forever addon that shows a guildmate's **public guild note*
 <img width="497" height="138" alt="image" src="https://github.com/user-attachments/assets/02d04b7e-8a21-45f1-9b9a-136886f8b9c3" />
 
 - Keeps Blizzard's class colour on the name; clicking, right-clicking and whispering a name work as normal.
-- Works with the default chat and with the EllesmereUI Chat module.
+- Works with the default chat, the EllesmereUI Chat module and Better Forever Chat (its level and class colour are kept).
 - Leaves protected chat (encounters, Mythic+, PvP, instances) untouched.
 
 ## Commands
@@ -20,6 +20,9 @@ A World of Warcraft: Forever addon that shows a guildmate's **public guild note*
 | `/whodis color RRGGBB` / `/whodis color off` | Colour the note, or let it follow the channel colour. |
 | `/whodis test [name]` | Print a sample line to check it works. |
 | `/whodis status` / `/whodis debug` | Troubleshooting info. |
+| `/whodis log` | The last lines WhoDis changed, before and after, with raw codes shown. |
+| `/whodis errors` | Any error WhoDis caught this session, and the line that caused it. |
+| `/whodis selftest [name]` | Prints test lines to check notes display correctly in your chat. |
 
 `/wd` works as a short alias.
 
