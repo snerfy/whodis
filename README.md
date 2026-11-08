@@ -3,12 +3,12 @@
 A World of Warcraft: Forever addon that shows a guildmate's **public guild note** next to their name in chat.
 
 ```
-[Bean Sommelier]: hello        ->   [Bean Sommelier(snerf)]: hello
+[Bean Sommelier]: hello        ->   [Bean Sommelier (snerf)]: hello
 ```
 <img width="497" height="138" alt="image" src="https://github.com/user-attachments/assets/02d04b7e-8a21-45f1-9b9a-136886f8b9c3" />
 
 - Keeps Blizzard's class colour on the name; clicking, right-clicking and whispering a name work as normal.
-- Works with the default chat, the EllesmereUI Chat module and Better Forever Chat (its level and class colour are kept).
+- Works with the default chat, EllesmereUI Chat, Better Forever Chat, Chattynator and Prat-3.0, keeping their own changes to names (levels, class colours, brackets).
 - Leaves protected chat (encounters, Mythic+, PvP, instances) untouched.
 
 ## Commands
@@ -25,6 +25,19 @@ A World of Warcraft: Forever addon that shows a guildmate's **public guild note*
 | `/whodis selftest [name]` | Prints test lines to check notes display correctly in your chat. |
 
 `/wd` works as a short alias.
+
+## Testing
+
+The compatibility tests run on every push (GitHub Actions, Lua 5.1 and 5.4). They mock
+the WoW client and each supported chat addon, and check that notes appear correctly
+without breaking the other addon's changes. To run them locally from the repo root:
+
+```
+bash tests/run.sh               # needs a `lua` interpreter (5.1 matches the game)
+LUA=lua5.4 bash tests/run.sh
+```
+
+The `tests` folder is not included in the addon download.
 
 ## Releasing
 
